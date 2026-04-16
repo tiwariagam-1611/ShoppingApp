@@ -12,8 +12,7 @@ public class UserRequestDto {
 
     private String role;
 
-    public UserRequestDto() {
-    }
+    public UserRequestDto() {}
 
     public UserRequestDto(String firstName, String lastName, String email, String phone, String role) {
         this.firstName = firstName;
