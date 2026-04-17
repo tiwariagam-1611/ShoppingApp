@@ -20,7 +20,6 @@ public class UserResponseDto {
     }
 
     // Getters & Setters
-
     public Long getUserId() {
         return userId;
     }

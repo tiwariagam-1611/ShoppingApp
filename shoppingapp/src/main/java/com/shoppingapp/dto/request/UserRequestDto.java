@@ -1,15 +1,25 @@
 package com.shoppingapp.dto.request;
 
+import jakarta.validation.constraints.*;
+
 public class UserRequestDto {
-
+	
+	@NotBlank(message = "First name is required")
     private String firstName;
-
+	
+	@NotBlank(message = "Last name is required")
     private String lastName;
 
+	@NotBlank(message = "Email is required")
+	@Email(message = "Email should be valid")
     private String email;
 
+	@NotBlank(message = "Phone number is required")
+	@Pattern(regexp = "^[0-9]{10}$", message = "Phone number should be valid and have exactly 10 digits")
     private String phone;
-
+	
+	@NotBlank(message = "Role is required")
+	@Pattern(regexp = "^(CUSTOMER|ADMIN)$", message = "Role must be either 'CUSTOMER' or 'ADMIN'")
     private String role;
 
     public UserRequestDto() {}
