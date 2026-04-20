@@ -10,7 +10,7 @@ public class ProductRequestDTO {
     public ProductRequestDTO() {}
 
     public ProductRequestDTO(String productName, String description,
-                             String category, Double price, String sku) {
+                             String category, Double price) {
         this.productName = productName;
         this.description = description;
         this.category = category;
