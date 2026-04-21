@@ -6,6 +6,8 @@ import com.shoppingapp.service.InventoryService;
 
 import jakarta.validation.Valid;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,46 +18,50 @@ import java.util.List;
 @RequestMapping("/api/inventory")
 public class InventoryController {
 
+    private static final Logger logger = LoggerFactory.getLogger(InventoryController.class);
+
     @Autowired
     private InventoryService inventoryService;
 
     // 1. Create Inventory
-    // Path: POST http://localhost:8080/api/inventory
-    // Request Body: {"productId": 1, "availableQuantity": 50, "reorderLevel": 10}
     @PostMapping
     public ResponseEntity<InventoryResponseDTO> addInventory(@RequestBody InventoryRequestDTO requestDTO) {
-        return ResponseEntity.ok(inventoryService.createInventory(requestDTO));
+        logger.info("Received request to add inventory for product ID: {}", requestDTO.getProductId());
+        InventoryResponseDTO response = inventoryService.createInventory(requestDTO);
+        logger.info("Successfully created inventory for product ID: {}", response.getProductId());
+        return ResponseEntity.ok(response);
     }
 
     // 2. Get Inventory by Product ID
-    // Path: GET http://localhost:8080/api/inventory/{productId}
     @GetMapping("/{productId}")
     public ResponseEntity<InventoryResponseDTO> getInventoryByProductId(@PathVariable Long productId) {
+        logger.info("Fetching inventory details for product ID: {}", productId);
         return ResponseEntity.ok(inventoryService.getInventoryResponseByProductId(productId));
     }
 
     // 3. Get all Low Stock items
-    // Path: GET http://localhost:8080/api/inventory/low-stock
     @GetMapping("/low-stock")
     public ResponseEntity<List<InventoryResponseDTO>> getLowStockItems() {
+        logger.info("Fetching all low-stock items.");
         return ResponseEntity.ok(inventoryService.getLowStockItems());
     }
 
     // 4. Get All Inventory
-    // Path: GET http://localhost:8080/api/inventory
     @GetMapping
     public ResponseEntity<List<InventoryResponseDTO>> getAllInventory() {
+        logger.info("Fetching all inventory items.");
         return ResponseEntity.ok(inventoryService.getAllInventory());
     }
 
     // 5. Update Inventory for a specific product
-    // Path: PUT http://localhost:8080/api/inventory/{productId}
-    // Request Body: {"availableQuantity": 100, "reorderLevel": 20}
     @PutMapping("/{productId}")
     public ResponseEntity<InventoryResponseDTO> updateInventory(
             @PathVariable Long productId,
             @Valid @RequestBody InventoryRequestDTO requestDTO) {
         
-        return ResponseEntity.ok(inventoryService.updateInventory(productId, requestDTO));
+        logger.info("Received update request for product ID: {}", productId);
+        InventoryResponseDTO response = inventoryService.updateInventory(productId, requestDTO);
+        logger.info("Successfully updated inventory for product ID: {}", productId);
+        return ResponseEntity.ok(response);
     }
 }
