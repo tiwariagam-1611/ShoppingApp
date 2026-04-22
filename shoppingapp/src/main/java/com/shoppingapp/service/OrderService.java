@@ -31,6 +31,9 @@ public class OrderService {
 
     @Autowired
     private InventoryService inventoryService;
+    
+    @Autowired
+    private NotificationService notificationService;
 
     @Transactional
     public OrderResponseDTO checkout(OrderRequestDTO orderRequest) {
@@ -68,7 +71,10 @@ public class OrderService {
 
         Order savedOrder = orderRepository.save(order);
         orderItemRepository.saveAll(orderItems);
-        // notificationService.send(user.getEmail(), "Order placed successfully! Order ID: " + savedOrder.getOrderId());
+        notificationService.generateCheckoutConfirmation(
+        	    user.getUserId(),
+        	    savedOrder.getOrderId()
+        	);
 
         return mapToResponseDTO(savedOrder);
     }
