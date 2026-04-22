@@ -7,85 +7,93 @@ import com.shoppingapp.exception.ResourceNotFoundException;
 import com.shoppingapp.model.User;
 import com.shoppingapp.repository.UserRepository;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@ExtendWith(MockitoExtension.class)
+@SpringBootTest
+@ActiveProfiles("test")
+@Transactional
 class UserServiceTest {
 
-    @Mock
+    @Autowired
+    private UserService userService;
+
+    @Autowired
     private UserRepository userRepository;
 
-    @InjectMocks
-    private UserService userService;
+    private User saveUser(String firstName, String lastName, String email) {
+        User user = new User();
+        user.setFirstName(firstName);
+        user.setLastName(lastName);
+        user.setEmail(email);
+        user.setPhone("1234567890");
+        user.setRole("CUSTOMER");
+        return userRepository.save(user);
+    }
 
     @Test
     void createUser_shouldNormalizeAndReturnResponse() {
         UserRequestDto request = new UserRequestDto(" John ", " Doe ", " TEST@MAIL.COM ", " 1234567890 ", " customer ");
 
-        User saved = new User();
-        saved.setUserId(1L);
-        saved.setFirstName("John");
-        saved.setLastName("Doe");
-        saved.setEmail("test@mail.com");
-        saved.setPhone("1234567890");
-        saved.setRole("CUSTOMER");
-
-        when(userRepository.save(any(User.class))).thenReturn(saved);
-
         UserResponseDto response = userService.createUser(request);
 
-        assertEquals(1L, response.getUserId());
+        assertEquals("John", response.getFirstName());
         assertEquals("test@mail.com", response.getEmail());
         assertEquals("CUSTOMER", response.getRole());
     }
 
     @Test
     void getAllUsers_shouldMapAllRows() {
-        User user = new User();
-        user.setUserId(1L);
-        user.setFirstName("A");
-        user.setLastName("B");
-        user.setEmail("a@b.com");
-        user.setPhone("123");
-        user.setRole("ADMIN");
-
-        when(userRepository.findAll()).thenReturn(List.of(user));
+        saveUser("A", "B", "a@b.com");
 
         List<UserResponseDto> response = userService.getAllUsers();
 
         assertEquals(1, response.size());
-        assertEquals(1L, response.get(0).getUserId());
+        assertEquals("a@b.com", response.get(0).getEmail());
     }
 
     @Test
     void getUserById_whenMissing_shouldThrow() {
-        when(userRepository.findById(99L)).thenReturn(Optional.empty());
-
         assertThrows(ResourceNotFoundException.class, () -> userService.getUserById(99L));
     }
 
     @Test
     void updateUser_whenEmailAlreadyExists_shouldThrow() {
-        User existing = new User();
-        existing.setUserId(1L);
-        existing.setEmail("old@mail.com");
-
-        when(userRepository.findById(1L)).thenReturn(Optional.of(existing));
-        when(userRepository.existsByEmail("new@mail.com")).thenReturn(true);
+        User existing = saveUser("Old", "User", "old@mail.com");
+        saveUser("Other", "User", "new@mail.com");
 
         UserRequestDto request = new UserRequestDto("A", "B", "new@mail.com", "123", "admin");
 
-        assertThrows(BadRequestException.class, () -> userService.updateUser(1L, request));
+        assertThrows(BadRequestException.class, () -> userService.updateUser(existing.getUserId(), request));
+    }
+
+    @Test
+    void updateUser_whenValid_shouldReturnUpdatedResponse() {
+        User existing = saveUser("Old", "User", "old@mail.com");
+
+        UserRequestDto request = new UserRequestDto(" Jane ", " Doe ", " NEW@MAIL.COM ", " 999 ", " admin ");
+
+        UserResponseDto response = userService.updateUser(existing.getUserId(), request);
+
+        assertEquals(existing.getUserId(), response.getUserId());
+        assertEquals("new@mail.com", response.getEmail());
+        assertEquals("ADMIN", response.getRole());
+    }
+
+    @Test
+    void existsUser_shouldReturnRepositoryState() {
+        User created = saveUser("Exists", "User", "exists@mail.com");
+
+        assertTrue(userService.existsUser(created.getUserId()));
+        assertFalse(userService.existsUser(created.getUserId() + 100L));
     }
 }

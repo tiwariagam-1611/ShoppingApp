@@ -7,94 +7,153 @@ import com.shoppingapp.model.Product;
 import com.shoppingapp.repository.InventoryRepository;
 import com.shoppingapp.repository.ProductRepository;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Optional;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
+@SpringBootTest
+@ActiveProfiles("test")
+@Transactional
 class InventoryServiceTest {
 
-    @Mock
+    @Autowired
+    private InventoryService inventoryService;
+
+    @Autowired
     private InventoryRepository inventoryRepository;
 
-    @Mock
+    @Autowired
     private ProductRepository productRepository;
 
-    @InjectMocks
-    private InventoryService inventoryService;
+    private Product saveProduct(String name) {
+        Product product = new Product();
+        product.setProductName(name);
+        product.setDescription(name + " description");
+        product.setCategory("General");
+        product.setPrice(50.0);
+        return productRepository.save(product);
+    }
+
+    private Inventory saveInventory(Product product, int available, int reorder) {
+        Inventory inventory = new Inventory();
+        inventory.setProduct(product);
+        inventory.setAvailableQuantity(available);
+        inventory.setReorderLevel(reorder);
+        return inventoryRepository.save(inventory);
+    }
 
     @Test
     void createInventory_shouldReturnDto() {
-        Product product = new Product();
-        product.setProductId(1L);
-        product.setProductName("Milk");
+        Product product = saveProduct("Milk");
 
         InventoryRequestDTO request = new InventoryRequestDTO();
-        request.setProductId(1L);
+        request.setProductId(product.getProductId());
         request.setAvailableQuantity(20);
         request.setReorderLevel(5);
 
-        Inventory saved = new Inventory();
-        saved.setInventoryId(100L);
-        saved.setProduct(product);
-        saved.setAvailableQuantity(20);
-        saved.setReorderLevel(5);
-
-        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
-        when(inventoryRepository.save(any(Inventory.class))).thenReturn(saved);
-
         InventoryResponseDTO response = inventoryService.createInventory(request);
 
-        assertEquals(100L, response.getInventoryId());
+        assertEquals(product.getProductId(), response.getProductId());
         assertEquals("IN_STOCK", response.getStatus());
     }
 
     @Test
-    void getInventoryByProductId_whenMissing_shouldThrow() {
-        when(inventoryRepository.findByProduct_ProductId(99L)).thenReturn(Optional.empty());
+    void createInventory_whenProductMissing_shouldThrow() {
+        InventoryRequestDTO request = new InventoryRequestDTO();
+        request.setProductId(999L);
 
+        assertThrows(RuntimeException.class, () -> inventoryService.createInventory(request));
+    }
+
+    @Test
+    void getAllInventory_shouldReturnMappedDtos() {
+        Product inStockProduct = saveProduct("Milk");
+        Product lowStockProduct = saveProduct("Bread");
+        saveInventory(inStockProduct, 10, 3);
+        saveInventory(lowStockProduct, 2, 2);
+
+        List<InventoryResponseDTO> response = inventoryService.getAllInventory();
+
+        assertEquals(2, response.size());
+        assertEquals("IN_STOCK", response.get(0).getStatus());
+        assertEquals("LOW_STOCK", response.get(1).getStatus());
+    }
+
+    @Test
+    void getInventoryByProductId_whenFound_shouldReturnMappedDto() {
+        Product product = saveProduct("Eggs");
+        Inventory inventory = saveInventory(product, 9, 2);
+
+        InventoryResponseDTO response = inventoryService.getInventoryResponseByProductId(product.getProductId());
+
+        assertEquals(inventory.getInventoryId(), response.getInventoryId());
+        assertEquals("Eggs", response.getProductName());
+    }
+
+    @Test
+    void getLowStockItems_shouldReturnMappedDtos() {
+        Product lowStockProduct = saveProduct("Juice");
+        saveInventory(lowStockProduct, 1, 2);
+
+        List<InventoryResponseDTO> response = inventoryService.getLowStockItems();
+
+        assertEquals(1, response.size());
+        assertEquals("LOW_STOCK", response.get(0).getStatus());
+        assertEquals(lowStockProduct.getProductId(), response.get(0).getProductId());
+    }
+
+    @Test
+    void updateInventory_shouldUpdateOnlyProvidedFields() {
+        Product product = saveProduct("Milk");
+        saveInventory(product, 12, 4);
+
+        InventoryRequestDTO request = new InventoryRequestDTO();
+        request.setAvailableQuantity(8);
+
+        InventoryResponseDTO response = inventoryService.updateInventory(product.getProductId(), request);
+
+        assertEquals(8, response.getAvailableQuantity());
+        assertEquals(4, response.getReorderLevel());
+        assertEquals("Milk", response.getProductName());
+    }
+
+    @Test
+    void updateInventory_whenMissing_shouldThrow() {
+        InventoryRequestDTO request = new InventoryRequestDTO();
+        request.setAvailableQuantity(7);
+
+        assertThrows(RuntimeException.class, () -> inventoryService.updateInventory(77L, request));
+    }
+
+    @Test
+    void getInventoryByProductId_whenMissing_shouldThrow() {
         assertThrows(RuntimeException.class, () -> inventoryService.getInventoryResponseByProductId(99L));
     }
 
     @Test
     void deductStock_whenInsufficient_shouldThrow() {
-        Product product = new Product();
-        product.setProductId(1L);
+        Product product = saveProduct("Milk");
+        saveInventory(product, 2, 1);
 
-        Inventory inventory = new Inventory();
-        inventory.setProduct(product);
-        inventory.setAvailableQuantity(2);
-        inventory.setReorderLevel(1);
-
-        when(inventoryRepository.findByProduct_ProductId(1L)).thenReturn(Optional.of(inventory));
-
-        assertThrows(RuntimeException.class, () -> inventoryService.deductStock(1L, 3));
+        assertThrows(RuntimeException.class, () -> inventoryService.deductStock(product.getProductId(), 3));
     }
 
     @Test
     void deductStock_whenEnough_shouldSaveUpdatedInventory() {
-        Product product = new Product();
-        product.setProductId(1L);
+        Product product = saveProduct("Milk");
+        saveInventory(product, 10, 3);
 
-        Inventory inventory = new Inventory();
-        inventory.setProduct(product);
-        inventory.setAvailableQuantity(10);
-        inventory.setReorderLevel(3);
+        inventoryService.deductStock(product.getProductId(), 4);
 
-        when(inventoryRepository.findByProduct_ProductId(1L)).thenReturn(Optional.of(inventory));
-
-        inventoryService.deductStock(1L, 4);
-
-        assertEquals(6, inventory.getAvailableQuantity());
-        verify(inventoryRepository).save(inventory);
+        int remaining = inventoryRepository.findByProduct_ProductId(product.getProductId())
+                .orElseThrow()
+                .getAvailableQuantity();
+        assertEquals(6, remaining);
     }
 }

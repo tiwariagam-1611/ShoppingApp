@@ -6,28 +6,35 @@ import com.shoppingapp.model.Notification;
 import com.shoppingapp.repository.NotificationRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Optional;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
+@SpringBootTest
+@ActiveProfiles("test")
+@Transactional
 class NotificationServiceImplTest {
 
-    @Mock
+    @Autowired
+    private NotificationServiceImpl notificationService;
+
+    @Autowired
     private NotificationRepository notificationRepository;
 
-    @InjectMocks
-    private NotificationServiceImpl notificationService;
+    private Notification saveNotification(String type, String recipient, String message) {
+        Notification notification = new Notification();
+        notification.setNotificationType(type);
+        notification.setRecipientReference(recipient);
+        notification.setMessage(message);
+        notification.setStatus("NEW");
+        return notificationRepository.save(notification);
+    }
 
     @Test
     void createNotification_shouldPersistAndReturnDto() {
@@ -37,39 +44,62 @@ class NotificationServiceImplTest {
         request.setMessage("Low stock alert");
         request.setStatus("NEW");
 
-        Notification saved = new Notification();
-        saved.setNotificationId(10L);
-        saved.setNotificationType("LOW_STOCK");
-        saved.setRecipientReference("ADMIN");
-        saved.setMessage("Low stock alert");
-        saved.setStatus("NEW");
-
-        when(notificationRepository.save(any(Notification.class))).thenReturn(saved);
-
         NotificationResponse response = notificationService.createNotification(request);
 
-        assertEquals(10L, response.getNotificationId());
         assertEquals("LOW_STOCK", response.getNotificationType());
+        assertEquals("ADMIN", response.getRecipientReference());
     }
 
     @Test
     void getNotificationById_whenMissing_shouldThrow() {
-        when(notificationRepository.findById(1L)).thenReturn(Optional.empty());
-
         assertThrows(EntityNotFoundException.class, () -> notificationService.getNotificationById(1L));
     }
 
     @Test
+    void getAllNotifications_shouldReturnMappedList() {
+        saveNotification("CHECKOUT_CONFIRMATION", "7", "Checkout confirmed");
+
+        List<NotificationResponse> response = notificationService.getAllNotifications();
+
+        assertEquals(1, response.size());
+        assertEquals("CHECKOUT_CONFIRMATION", response.get(0).getNotificationType());
+    }
+
+    @Test
+    void getNotificationByRecipient_shouldReturnMappedList() {
+        saveNotification("LOW_STOCK", "ADMIN_USER", "Low stock");
+
+        List<NotificationResponse> response = notificationService.getNotificationByRecipient("ADMIN_USER");
+
+        assertEquals(1, response.size());
+        assertEquals("LOW_STOCK", response.get(0).getNotificationType());
+    }
+
+    @Test
     void checkForLowStock_whenAboveThreshold_shouldNotSave() {
+        long before = notificationRepository.count();
+
         notificationService.checkForLowStock(10L, 8);
 
-        verify(notificationRepository, never()).save(any(Notification.class));
+        assertEquals(before, notificationRepository.count());
+    }
+
+    @Test
+    void checkForLowStock_whenAtThreshold_shouldSaveLowStockNotification() {
+        notificationService.checkForLowStock(10L, 5);
+
+        List<Notification> saved = notificationRepository.findAll();
+        assertEquals(1, saved.size());
+        assertEquals("LOW_STOCK", saved.get(0).getNotificationType());
+        assertEquals("ADMIN_USER", saved.get(0).getRecipientReference());
     }
 
     @Test
     void generateCheckoutConfirmation_shouldSaveNotification() {
         notificationService.generateCheckoutConfirmation(7L, 100L);
 
-        verify(notificationRepository).save(any(Notification.class));
+        List<Notification> saved = notificationRepository.findAll();
+        assertEquals(1, saved.size());
+        assertEquals("CHECKOUT_CONFIRMATION", saved.get(0).getNotificationType());
     }
 }
